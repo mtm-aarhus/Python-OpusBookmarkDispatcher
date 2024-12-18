@@ -19,7 +19,7 @@ ERROR_EMAIL = "jadt"
 # ----------------------
 
 # The name of the job queue (if any)
-QUEUE_NAME = "AktbobDokumentlisteQueue"
+QUEUE_NAME = "OpusBookMarkQueue"
 
 # The limit on how many queue elements to process
 MAX_TASK_COUNT = 100

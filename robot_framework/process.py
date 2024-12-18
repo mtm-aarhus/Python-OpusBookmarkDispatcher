@@ -1,6 +1,4 @@
 """This module contains the main process of the robot."""
-
-
 import json
 from OpenOrchestrator.orchestrator_connection.connection import OrchestratorConnection
 from office365.runtime.auth.user_credential import UserCredential
@@ -20,12 +18,11 @@ import os
 import time
 import requests
 
-# pylint: disable-next=unused-argument
 def process(orchestrator_connection: OrchestratorConnection, queue_element: QueueElement | None = None) -> None:
     #Connect to orchestrator
     orchestrator_connection = OrchestratorConnection("PythonOpusBookMark", os.getenv('OpenOrchestratorSQL'),os.getenv('OpenOrchestratorKey'), None)
 
-    log = False
+    log = True
 
     if log:
         orchestrator_connection.log_info("Started process")
@@ -67,7 +64,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     PasswordString = OpusPassword      ############# Måske ikke rigtigt
     BookmarkID = specific_content.get("Bookmark")
     OpusBookmark = orchestrator_connection.get_constant("OpusBookMarkUrl").value + BookmarkID
-    SharePointURL = orchestrator_connection.get_constant("LauraTestSharepointURL").value + "/Delte Dokumenter/"
+    SharePointURL = orchestrator_connection.get_constant("LauraTestSharepointURL").value + "/Delte Dokumenter/OPUSrobottest/"
     #SharepointURL = specific_content.get("SharePointMappeLink", None)
     FileName = specific_content.get("Filnavn", None)
     Daily = specific_content.get("Dagligt (Ja/Nej)", None)
@@ -119,7 +116,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
         #Connecting to sharepoint
         credentials = UserCredential(RobotUsername, RobotPassword)
         ctx = ClientContext(SharepointURL_connection).with_credentials(credentials)
-        
+
         #Checking connection
         web = ctx.web
         ctx.load(web)
