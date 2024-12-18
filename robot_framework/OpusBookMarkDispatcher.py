@@ -5,7 +5,7 @@ import os
 from openpyxl import load_workbook
 import json 
 
-log = False
+log = True
 
 #Connect to orchestrator
 orchestrator_connection = OrchestratorConnection("Opus bookmark dispatcher", os.getenv('OpenOrchestratorSQL'),os.getenv('OpenOrchestratorKey'), None)
@@ -41,7 +41,7 @@ password = RobotCredentials.password
 
 # SharePoint site and parent folder URL
 SHAREPOINT_SITE_URL = API_url
-PARENT_FOLDER_URL = API_url.split(".com/") + "/OPUSrobottest/OpusBogmærker_kopi.xlsx"
+PARENT_FOLDER_URL = API_url.split(".com")[-1] + "/Delte Dokumenter/OPUSrobottest/OpusBogmærker_kopi.xlsx"
 
 file_name = PARENT_FOLDER_URL.split("/")[-1]
 
