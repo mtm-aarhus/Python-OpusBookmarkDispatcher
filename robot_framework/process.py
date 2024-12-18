@@ -68,10 +68,10 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     #SharepointURL = specific_content.get("SharePointMappeLink", None)
     FileName = specific_content.get("Filnavn", None)
     Daily = specific_content.get("Dagligt (Ja/Nej)", None)
+    print(Daily)
     MonthEnd = specific_content.get("MånedsSlut (Ja/Nej)", None)
     MonthStart = specific_content.get("MånedsStart (Ja/Nej)", None)
     Yearly = specific_content.get("Årligt (Ja/Nej)", None)
-    print(BookmarkID, OpusBookmark, FileName, Daily, MonthEnd, MonthStart, Yearly)
     # Mark the queue item as 'In Progress'
     orchestrator_connection.set_queue_element_status(queue_item.id, "IN_PROGRESS")
 
@@ -81,7 +81,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     Run = False
 
     #Testing if it should run
-    if Daily == "ja":
+    if Daily == "ja" or Daily == "Ja":
         Run = True
     else:
         current_date = datetime.now()
