@@ -57,9 +57,11 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
         exit()
 
     specific_content = json.loads(queue_item.data)
+    print(specific_content)
 
     if log:
         orchestrator_connection.log_info("Assigning variables")
+
     # Assign variables from SpecificContent
     PasswordString = OpusPassword      ############# Måske ikke rigtigt
     BookmarkID = specific_content.get("Bookmark")
@@ -107,9 +109,6 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
         # SharePoint credentials
         if log:
             orchestrator_connection.log_info("Connecting to sharepoint")
-        SharePointcreds = orchestrator_connection.get_credential("GraphAppIDAndTenant")
-        SharePointAppID = SharePointcreds.username
-        SharePointTenant = SharePointcreds.password
         SharepointURL_connection = orchestrator_connection.get_constant("AktbobSharePointURL").value
         SharepointURL_connection = orchestrator_connection.get_constant("LauraTestSharepointURL").value
 
@@ -194,6 +193,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
         # Download the file
         with open(download_path, "wb") as local_file:
             file = ctx.web.get_file_by_server_relative_path(xlsx_file_path).download(local_file).execute_query()
+        print(file, file_name)
 
         if log:
             orchestrator_connection.log_info("Uploading file to sharepoint")
@@ -202,15 +202,10 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
         response = requests.get(SharePointURL)
         response.raise_for_status()
 
-        # Parse the JSON response
-        folder_info = response.json()
-
-        target_url = f"{SharePointURL}/{FileName}"
-
         # The upload
         with open(xlsx_file_path, "rb") as local_file:
             target_folder = ctx.web.get_folder_by_server_relative_url(SharePointURL)
-            target_folder.upload_file(file_name, local_file.read()).execute_query()
+            target_folder.upload_file(file, local_file.read()).execute_query()
 
         #Removing the local file
         if os.path.exists(FileName):
