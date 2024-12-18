@@ -41,7 +41,7 @@ password = RobotCredentials.password
 
 # SharePoint site and parent folder URL
 SHAREPOINT_SITE_URL = API_url
-PARENT_FOLDER_URL = API_url.split(".com/") + "/OPUSrobottest/OpusBogmærker_kopi.xlsx" #should I add filename ?
+PARENT_FOLDER_URL = API_url.split(".com/") + "/OPUSrobottest/OpusBogmærker_kopi.xlsx"
 
 file_name = PARENT_FOLDER_URL.split("/")[-1]
 

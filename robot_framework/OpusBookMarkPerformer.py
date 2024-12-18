@@ -18,7 +18,7 @@ import time
 import requests
 
 #Connect to orchestrator
-orchestrator_connection = OrchestratorConnection("Opus bookmark performer", os.getenv('OpenOrchestratorSQL'),os.getenv('OpenOrchestratorKey'), None)
+orchestrator_connection = OrchestratorConnection("PythonOpusBookMark", os.getenv('OpenOrchestratorSQL'),os.getenv('OpenOrchestratorKey'), None)
 
 log = False
 
@@ -36,7 +36,7 @@ RobotUsername = RobotCredential.username
 RobotPassword = RobotCredential.password
 
 # Define the queue name
-queue_name = "OpusBookmarkQueue"  # Replace with your queue name
+queue_name = "OpusBookmarkQueue" 
 
  # Assign variables from SpecificContent
 PasswordString = None
@@ -47,7 +47,7 @@ Daily = None
 MonthEnd = None
 MonthStart = None
 Yearly = None
-i = 1
+
 # Get all queue elements with status 'New'
 queue_item = orchestrator_connection.get_next_queue_element(queue_name)
 if not queue_item:
