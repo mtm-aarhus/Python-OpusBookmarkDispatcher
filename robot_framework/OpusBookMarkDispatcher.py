@@ -72,7 +72,7 @@ if row_count > 0:
             "Bookmark": ark1[f"A{row_idx}"].value,  # Replace with actual column names
             "Filnavn": ark1[f"B{row_idx}"].value,  # Adjust column references as needed
             "SharePointMappeLink": ark1[f"C{row_idx}"].value, 
-            "Daglig (Ja/Nej)": ark1[f"D{row_idx}"].value, 
+            "Dagligt (Ja/Nej)": ark1[f"D{row_idx}"].value, 
             "MånedsSlut (Ja/Nej)": ark1[f"E{row_idx}"].value, 
             "MånedsStart (Ja/Nej)": ark1[f"F{row_idx}"].value,
             "Årlig (Ja/Nej)": ark1[f"G{row_idx}"].value,

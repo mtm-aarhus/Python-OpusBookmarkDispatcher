@@ -57,7 +57,6 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
         exit()
 
     specific_content = json.loads(queue_item.data)
-    print(specific_content)
 
     if log:
         orchestrator_connection.log_info("Assigning variables")
@@ -70,7 +69,6 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     #SharepointURL = specific_content.get("SharePointMappeLink", None)
     FileName = specific_content.get("Filnavn", None)
     Daily = specific_content.get("Dagligt (Ja/Nej)", None)
-    print(Daily)
     MonthEnd = specific_content.get("MånedsSlut (Ja/Nej)", None)
     MonthStart = specific_content.get("MånedsStart (Ja/Nej)", None)
     Yearly = specific_content.get("Årligt (Ja/Nej)", None)
@@ -173,6 +171,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
             # Step 5: Convert the downloaded file to .xlsx
             xls_file_path = latest_file
             xlsx_file_path = os.path.join(downloads_folder, FileName + ".xlsx")
+            print(xlsx_file_path)
 
             wb = load_workbook(xls_file_path)
             wb.save(xlsx_file_path)
