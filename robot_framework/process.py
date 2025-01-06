@@ -65,7 +65,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     # Assign variables from SpecificContent
     BookmarkID = specific_content.get("Bookmark")
     OpusBookmark = orchestrator_connection.get_constant("OpusBookMarkUrl").value + BookmarkID
-    SharePointURL = SharePointURL = orchestrator_connection.get_constant("LauraTestSharepointURLFullPath").value ######Slet efter test - slet også konstant i OO
+    SharePointURL =  orchestrator_connection.get_constant("LauraTestSharepointURLFullPath").value ######Slet efter test - slet også konstant i OO
     #SharepointURL = specific_content.get("SharePointMappeLink", None)
     FileName = specific_content.get("Filnavn", None)
     Daily = specific_content.get("Dagligt (Ja/Nej)", None)
