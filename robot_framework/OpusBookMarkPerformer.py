@@ -1,8 +1,10 @@
+"""This module contains the main process of the robot."""
 import json
 from OpenOrchestrator.orchestrator_connection.connection import OrchestratorConnection
 from office365.runtime.auth.user_credential import UserCredential
 from office365.sharepoint.client_context import ClientContext
 import os
+from urllib.parse import urlparse, parse_qs, unquote
 from openpyxl import load_workbook
 from OpenOrchestrator.database.queues import QueueElement
 from datetime import datetime
@@ -13,14 +15,15 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-import os
 import time
 import requests
+from urllib.parse import unquote, urlparse
+import win32com.client as win32
 
 #Connect to orchestrator
 orchestrator_connection = OrchestratorConnection("PythonOpusBookMark", os.getenv('OpenOrchestratorSQL'),os.getenv('OpenOrchestratorKey'), None)
 
-log = False
+log = True
 
 if log:
     orchestrator_connection.log_info("Started process")
@@ -38,7 +41,7 @@ RobotPassword = RobotCredential.password
 # Define the queue name
 queue_name = "OpusBookmarkQueue" 
 
- # Assign variables from SpecificContent
+# Assign variables from SpecificContent
 PasswordString = None
 OpusBookmark = None
 SharePointURL = None
@@ -49,37 +52,52 @@ MonthStart = None
 Yearly = None
 
 # Get all queue elements with status 'New'
-queue_item = orchestrator_connection.get_next_queue_element(queue_name)
-if not queue_item:
-    orchestrator_connection.log_info("No new queue items to process.")
-    exit()
+# queue_item = orchestrator_connection.get_next_queue_element(queue_name)
+# if not queue_item:
+#     orchestrator_connection.log_info("No new queue items to process.")
+#     exit()
+queue_item = {
+    "Bookmark": "D8DA6XD33HJM3OFKX2SQGHC1X", 
+    "Filnavn": "FIB045 - Byliv drift", 
+    "SharePointMappeLink": "https://aarhuskommune.sharepoint.com/:f:/r/Teams/tea-teamsite10343/Delte%20dokumenter/1%20-%20Rapportemner/Midlertidig%20testmappe?csf=1&web=1&e=wC1uRE", 
+    "Dagligt (Ja/Nej)": "Ja", 
+    "MånedsSlut (Ja/Nej)": None,
+    "MånedsStart (Ja/Nej)": None,
+    "Årlig (Ja/Nej)": None, 
+    "Ansvarlig i økonomi": "Thomas Højen", 
+    "Rapportype": "FIB045", 
+    "Fulde link til Opus": "https://portal-k1-nc-21.kmd.dk/irj/servlet/prt/portal/prtroot/pcd!3aportal_content!2fcom.sap.pct!2fplatform_add_ons!2fcom.sap.ip.bi!2fiViews!2fcom.sap.ip.bi.bex?BOOKMARK=D8DA6XD33HJM3OFKX2SQGHC1X", 
+    "Kolonne1": "=HYPERLINK(Tabel1[[#This Row],[Fulde link til Opus]],\"LINK\")", 
+    "Kommentar": "Adgang"
+    }
 
-specific_content = json.loads(queue_item.data)
+# specific_content = json.loads(queue_item.data)
+specific_content = queue_item
 
 if log:
     orchestrator_connection.log_info("Assigning variables")
+
 # Assign variables from SpecificContent
-PasswordString = OpusPassword      ############# Måske ikke rigtigt
+PasswordString = OpusPassword     
 BookmarkID = specific_content.get("Bookmark")
 OpusBookmark = orchestrator_connection.get_constant("OpusBookMarkUrl").value + BookmarkID
-SharePointURL = orchestrator_connection.get_constant("LauraTestSharepointURL").value + "/Delte Dokumenter/"
+SharePointURL = "https://aarhuskommune.sharepoint.com/Teams/tea-teamsite11819/Delte%20dokumenter/Forms/AllItems.aspx?id=%2FTeams%2Ftea%2Dteamsite11819%2FDelte%20dokumenter%2FOPUSrobottest&viewid=a5a48e76%2D9972%2D4980%2Dbf37%2D18596d6a27be"
 #SharepointURL = specific_content.get("SharePointMappeLink", None)
 FileName = specific_content.get("Filnavn", None)
 Daily = specific_content.get("Dagligt (Ja/Nej)", None)
 MonthEnd = specific_content.get("MånedsSlut (Ja/Nej)", None)
 MonthStart = specific_content.get("MånedsStart (Ja/Nej)", None)
 Yearly = specific_content.get("Årligt (Ja/Nej)", None)
-print(BookmarkID, OpusBookmark, FileName, Daily, MonthEnd, MonthStart, Yearly)
 # Mark the queue item as 'In Progress'
-orchestrator_connection.set_queue_element_status(queue_item.id, "IN_PROGRESS")
+# orchestrator_connection.set_queue_element_status(queue_item.id, "IN_PROGRESS")
 
 # Mark the queue item as 'Done' after processing
-orchestrator_connection.set_queue_element_status(queue_item.id, "DONE")
+# orchestrator_connection.set_queue_element_status(queue_item.id, "DONE")
 
 Run = False
 
 #Testing if it should run
-if Daily == "ja":
+if Daily.lower() == "ja":
     Run = True
 else:
     current_date = datetime.now()
@@ -87,33 +105,40 @@ else:
     
     # Check for month-end
     last_day_of_month = calendar.monthrange(year, month)[1]  
-    if MonthEnd == "ja" and day == last_day_of_month:
+    if MonthEnd.lower() == "ja" and day == last_day_of_month:
         Run = True
     # Check for month-start
-    elif MonthStart == "ja" and day == 1:
+    elif MonthStart.lower() == "ja" and day == 1:
         Run = True
     # Check for year-end
-    elif Yearly == "ja" and day == 31 and month == 12:
+    elif Yearly.lower() == "ja" and day == 31 and month == 12:
         Run = True
     
 if Run:
-    print("Running")
-    # Delete the file if it exists
-    if os.path.exists(FileName):
-        os.remove(FileName)
+    def convert_xls_to_xlsx(path: str) -> None:
+        absolute_path = os.path.abspath(path)
+        excel = win32.gencache.EnsureDispatch('Excel.Application')
+        wb = excel.Workbooks.Open(absolute_path)
+
+        # FileFormat=51 is for .xlsx extension
+        new_path = os.path.splitext(absolute_path)[0] + ".xlsx"
+        wb.SaveAs(new_path, FileFormat=51)
+        wb.Close()
+        excel.Application.Quit()    
+        if os.path.exists(absolute_path):
+            os.remove(absolute_path)
+
 
     # SharePoint credentials
     if log:
         orchestrator_connection.log_info("Connecting to sharepoint")
-    SharePointcreds = orchestrator_connection.get_credential("GraphAppIDAndTenant")
-    SharePointAppID = SharePointcreds.username
-    SharePointTenant = SharePointcreds.password
     SharepointURL_connection = orchestrator_connection.get_constant("AktbobSharePointURL").value
     SharepointURL_connection = orchestrator_connection.get_constant("LauraTestSharepointURL").value
 
     #Connecting to sharepoint
     credentials = UserCredential(RobotUsername, RobotPassword)
     ctx = ClientContext(SharepointURL_connection).with_credentials(credentials)
+
     #Checking connection
     web = ctx.web
     ctx.load(web)
@@ -121,6 +146,11 @@ if Run:
 
     # Selenium configuration
     downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads")
+    file_path = os.path.join(downloads_folder, FileName + ".xlsx")
+
+    # Delete the file if it exists in the Downloads folder
+    if os.path.exists(file_path):
+        os.remove(file_path)
     chrome_options = Options()
     chrome_options.add_experimental_option("prefs", {
         "download.default_directory": downloads_folder,
@@ -163,55 +193,85 @@ if Run:
                     [os.path.join(downloads_folder, f) for f in files], key=os.path.getctime
                 )
                 if latest_file.endswith(".xls"):
+                    new_file_path = os.path.join(downloads_folder, f"{FileName}.xls")
+                    os.rename(latest_file, new_file_path)
+
                     break
             if time.time() - start_time > 1800:  # Timeout after 30 minutes
                 raise TimeoutError("File download did not complete within 30 minutes.")
             time.sleep(1)
+        
 
         # Step 5: Convert the downloaded file to .xlsx
-        xls_file_path = latest_file
-        xlsx_file_path = os.path.join(downloads_folder, FileName + ".xlsx")
 
-        wb = load_workbook(xls_file_path)
-        wb.save(xlsx_file_path)
-        os.remove(xls_file_path)
-
+        xlsx_file_path = os.path.join(downloads_folder, FileName + ".xlsx")            
+        convert_xls_to_xlsx(new_file_path)
+        
     except Exception as e:
         orchestrator_connection.log_error(f"An error occurred during Selenium operations: {str(e)}")
     finally:
         driver.quit()
-    
+
     if log:
         orchestrator_connection.log_info("Getting file/folder")
-    
 
-    file_name = xlsx_file_path.split("/")[-1]
-    download_path = os.path.join(os.getcwd(), file_name)
-
-    # Download the file
-    with open(download_path, "wb") as local_file:
-        file = ctx.web.get_file_by_server_relative_path(xlsx_file_path).download(local_file).execute_query()
+    file_name = os.path.basename(xlsx_file_path)
+    download_path = os.path.join(downloads_folder, file_name)
 
     if log:
         orchestrator_connection.log_info("Uploading file to sharepoint")
 
-    # Send the GET request to SharePoint
-    response = requests.get(SharePointURL)
-    response.raise_for_status()
+    if ":f:" in SharePointURL or ":r:" in SharePointURL:
+        # Shared link resolution
+        response = ctx.execute_request_direct({
+            "url": SharePointURL,
+            "method": "GET",
+            "headers": {
+                "Accept": "application/json;odata=verbose"
+            }
+        })
 
-    # Parse the JSON response
-    folder_info = response.json()
+        if response.status_code == 200:
+            resolved_data = response.json()
+            server_relative_url = resolved_data.get("d", {}).get("ServerRelativeUrl", None)
+            if not server_relative_url:
+                raise ValueError("Failed to resolve shared link to a server-relative URL.")
+            server_relative_url = server_relative_url.rstrip('/')
+            target_folder = ctx.web.get_folder_by_server_relative_url(server_relative_url)
+        else:
+            raise ValueError(f"Failed to resolve shared link. Status code: {response.status_code}")
+    else:
+        # Standard URL resolution
+        parsed_url = urlparse(SharePointURL)
 
-    target_url = f"{SharePointURL}/{FileName}"
+        # Extract the `id` parameter that contains the folder path
+        query_params = parse_qs(parsed_url.query)
+        id_param = query_params.get("id", [None])[0]  # Extract the 'id' parameter value
+        if not id_param:
+            raise ValueError("No 'id' parameter found in the URL.")
+        decoded_path = unquote(id_param)  # Decode URL-encoded folder path
 
-    # The upload
+        # Validate the extracted path
+        if not decoded_path.startswith(('/Teams')):
+            raise ValueError(f"Invalid decoded path extracted from URL: {decoded_path}")
+
+        # Normalize the path to ensure it captures the full folder path
+        decoded_path = decoded_path.rstrip('/')
+
+        # Access the folder directly
+        target_folder = ctx.web.get_folder_by_server_relative_url(decoded_path)
+
+    # Upload the file
     with open(xlsx_file_path, "rb") as local_file:
-        target_folder = ctx.web.get_folder_by_server_relative_url(SharePointURL)
-        target_folder.upload_file(file_name, local_file.read()).execute_query()
+        file_content = local_file.read()
+        target_folder.upload_file(file_name, file_content).execute_query()
+
+    print(f"File '{file_name}' uploaded successfully to {SharePointURL}")
 
     #Removing the local file
-    if os.path.exists(FileName):
-        os.remove(FileName)
-
-        
+    if os.path.exists(xlsx_file_path):
+        os.remove(xlsx_file_path)
+    
+    if os.path.exists(downloads_folder + "YKMD_STD.xls"):
+        os.remove(download_path + "YKMD_STD.xls" )
 
