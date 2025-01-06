@@ -20,8 +20,9 @@ import win32com.client as win32
 
 
 def process(orchestrator_connection: OrchestratorConnection, queue_element: QueueElement | None = None) -> None:
-    """Do the primary process of the robot."""
-    orchestrator_connection.log_trace("Running process.")
+        #Connect to orchestrator
+    orchestrator_connection = OrchestratorConnection("PythonOpusBookMark", os.getenv('OpenOrchestratorSQL'),os.getenv('OpenOrchestratorKey'), None)
+
     log = True
 
     if log:
@@ -49,16 +50,13 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     MonthStart = None
     Yearly = None
 
-    # # Get all queue elements with status 'New'
-    # queue_item = orchestrator_connection.get_next_queue_element(queue_name)
-    # if not queue_item:
-    #     orchestrator_connection.log_info("No new queue items to process.")
-    #     exit()
-
-    specific_content = json.loads(queue_element.data)
-    if not specific_content:
+    # Get all queue elements with status 'New'
+    queue_item = orchestrator_connection.get_next_queue_element(queue_name)
+    if not queue_item:
         orchestrator_connection.log_info("No new queue items to process.")
         exit()
+
+    specific_content = json.loads(queue_item.data)
     # specific_content = queue_item
 
     if log:
