@@ -248,14 +248,16 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
                 # Access the folder directly
                 target_folder = ctx.web.get_folder_by_server_relative_url(decoded_path)
 
-            # Upload the file
-            if file_processed:
+            if not file_processed:
+                        print("Something went wrong with the file download")
+            else:
                 with open(xlsx_file_path, "rb") as local_file:
                     file_content = local_file.read()
                     target_folder.upload_file(file_name, file_content).execute_query()
 
                 print(f"File '{file_name}' uploaded successfully to {SharePointURL}")
-
+            
+       
             #Removing the local file
             if os.path.exists(xlsx_file_path):
                 os.remove(xlsx_file_path)
