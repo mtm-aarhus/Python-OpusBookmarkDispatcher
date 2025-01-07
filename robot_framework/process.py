@@ -190,6 +190,8 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
 
             xlsx_file_path = os.path.join(downloads_folder, FileName + ".xlsx")            
             convert_xls_to_xlsx(new_file_path)
+
+            file_processed = True
             
         except Exception as e:
             orchestrator_connection.log_error(f"An error occurred during Selenium operations: {str(e)}")
@@ -198,64 +200,66 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
 
         if log:
             orchestrator_connection.log_info("Getting file/folder")
-
-        file_name = os.path.basename(xlsx_file_path)
-        download_path = os.path.join(downloads_folder, file_name)
-
-        if log:
-            orchestrator_connection.log_info("Uploading file to sharepoint")
-
-        if ":f:" in SharePointURL or ":r:" in SharePointURL:
-            # Shared link resolution
-            response = ctx.execute_request_direct({
-                "url": SharePointURL,
-                "method": "GET",
-                "headers": {
-                    "Accept": "application/json;odata=verbose"
-                }
-            })
-
-            if response.status_code == 200:
-                resolved_data = response.json()
-                server_relative_url = resolved_data.get("d", {}).get("ServerRelativeUrl", None)
-                if not server_relative_url:
-                    raise ValueError("Failed to resolve shared link to a server-relative URL.")
-                server_relative_url = server_relative_url.rstrip('/')
-                target_folder = ctx.web.get_folder_by_server_relative_url(server_relative_url)
-            else:
-                raise ValueError(f"Failed to resolve shared link. Status code: {response.status_code}")
-        else:
-            # Standard URL resolution
-            parsed_url = urlparse(SharePointURL)
-
-            # Extract the `id` parameter that contains the folder path
-            query_params = parse_qs(parsed_url.query)
-            id_param = query_params.get("id", [None])[0]  # Extract the 'id' parameter value
-            if not id_param:
-                raise ValueError("No 'id' parameter found in the URL.")
-            decoded_path = unquote(id_param)  # Decode URL-encoded folder path
-
-            # Validate the extracted path
-            if not decoded_path.startswith(('/Teams')):
-                raise ValueError(f"Invalid decoded path extracted from URL: {decoded_path}")
-
-            # Normalize the path to ensure it captures the full folder path
-            decoded_path = decoded_path.rstrip('/')
-
-            # Access the folder directly
-            target_folder = ctx.web.get_folder_by_server_relative_url(decoded_path)
-
-        # Upload the file
-        with open(xlsx_file_path, "rb") as local_file:
-            file_content = local_file.read()
-            target_folder.upload_file(file_name, file_content).execute_query()
-
-        print(f"File '{file_name}' uploaded successfully to {SharePointURL}")
-
-        #Removing the local file
-        if os.path.exists(xlsx_file_path):
-            os.remove(xlsx_file_path)
         
-        if os.path.exists(downloads_folder + "YKMD_STD.xls"):
-            os.remove(download_path + "YKMD_STD.xls" )
+        if file_processed:
+            file_name = os.path.basename(xlsx_file_path)
+            download_path = os.path.join(downloads_folder, file_name)
+
+            if log:
+                orchestrator_connection.log_info("Uploading file to sharepoint")
+
+            if ":f:" in SharePointURL or ":r:" in SharePointURL:
+                # Shared link resolution
+                response = ctx.execute_request_direct({
+                    "url": SharePointURL,
+                    "method": "GET",
+                    "headers": {
+                        "Accept": "application/json;odata=verbose"
+                    }
+                })
+
+                if response.status_code == 200:
+                    resolved_data = response.json()
+                    server_relative_url = resolved_data.get("d", {}).get("ServerRelativeUrl", None)
+                    if not server_relative_url:
+                        raise ValueError("Failed to resolve shared link to a server-relative URL.")
+                    server_relative_url = server_relative_url.rstrip('/')
+                    target_folder = ctx.web.get_folder_by_server_relative_url(server_relative_url)
+                else:
+                    raise ValueError(f"Failed to resolve shared link. Status code: {response.status_code}")
+            else:
+                # Standard URL resolution
+                parsed_url = urlparse(SharePointURL)
+
+                # Extract the `id` parameter that contains the folder path
+                query_params = parse_qs(parsed_url.query)
+                id_param = query_params.get("id", [None])[0]  # Extract the 'id' parameter value
+                if not id_param:
+                    raise ValueError("No 'id' parameter found in the URL.")
+                decoded_path = unquote(id_param)  # Decode URL-encoded folder path
+
+                # Validate the extracted path
+                if not decoded_path.startswith(('/Teams')):
+                    raise ValueError(f"Invalid decoded path extracted from URL: {decoded_path}")
+
+                # Normalize the path to ensure it captures the full folder path
+                decoded_path = decoded_path.rstrip('/')
+
+                # Access the folder directly
+                target_folder = ctx.web.get_folder_by_server_relative_url(decoded_path)
+
+            # Upload the file
+            if file_processed:
+                with open(xlsx_file_path, "rb") as local_file:
+                    file_content = local_file.read()
+                    target_folder.upload_file(file_name, file_content).execute_query()
+
+                print(f"File '{file_name}' uploaded successfully to {SharePointURL}")
+
+            #Removing the local file
+            if os.path.exists(xlsx_file_path):
+                os.remove(xlsx_file_path)
+            
+            if os.path.exists(downloads_folder + "YKMD_STD.xls"):
+                os.remove(download_path + "YKMD_STD.xls" )
 
