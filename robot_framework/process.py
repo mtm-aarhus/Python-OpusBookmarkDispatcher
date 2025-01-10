@@ -17,38 +17,77 @@ from selenium.webdriver.chrome.options import Options
 import time
 from urllib.parse import unquote, urlparse
 import win32com.client as win32
+import gc
+import subprocess
 
 
 def process(orchestrator_connection: OrchestratorConnection, queue_element: QueueElement | None = None) -> None:
-        #Connect to orchestrator
-    orchestrator_connection = OrchestratorConnection("PythonOpusBookMark", os.getenv('OpenOrchestratorSQL'),os.getenv('OpenOrchestratorKey'), None)
+        # Global variables for ensuring single execution
+    conversion_in_progress = set()
 
-    log = True
+    def convert_xls_to_xlsx(path: str, timeout: int = 60) -> None:
+        """
+        Converts an .xls file to .xlsx format. Times out if the process exceeds the given duration.
+        
+        Args:
+            path (str): Path to the .xls file.
+            timeout (int): Maximum time allowed for conversion (in seconds).
+        """
+        absolute_path = os.path.abspath(path)
+        if absolute_path in conversion_in_progress:
+            orchestrator_connection.log_info(f"Conversion already in progress for {absolute_path}. Skipping.")
+            return
+        
+        conversion_in_progress.add(absolute_path)
+        start_time = time.time()  # Start the timer
+        try:
+            orchestrator_connection.log_info(f'Absolute path {absolute_path} found')
+            excel = win32.gencache.EnsureDispatch('Excel.Application')
+            wb = excel.Workbooks.Open(absolute_path)
 
-    if log:
-        orchestrator_connection.log_info("Started process")
+            # Check for timeout before proceeding
+            if time.time() - start_time > timeout:
+                raise TimeoutError("Conversion timed out before saving the file.")
 
-    #Opus bruger
+            # FileFormat=51 is for .xlsx extension
+            new_path = os.path.splitext(absolute_path)[0] + ".xlsx"
+            wb.SaveAs(new_path, FileFormat=51)
+            orchestrator_connection.log_info("wb save")
+
+            # Check for timeout before closing
+            if time.time() - start_time > timeout:
+                raise TimeoutError("Conversion timed out before closing the workbook.")
+            
+            wb.Close()
+            excel.Application.Quit()
+            del wb
+            del excel
+        except TimeoutError as e:
+            orchestrator_connection.log_error(str(e))
+            raise e
+        except Exception as e:
+            orchestrator_connection.log_error(f"An unexpected error occurred: {e}")
+            raise e
+        finally:
+            conversion_in_progress.remove(absolute_path)
+
+
+    orchestrator_connection = OrchestratorConnection("PythonOpusBookMark", os.getenv('OpenOrchestratorSQL'), os.getenv('OpenOrchestratorKey'), None)
+
+    orchestrator_connection.log_info("Started process")
+
+    # Opus bruger
     OpusLogin = orchestrator_connection.get_credential("OpusBruger")
     OpusUser = OpusLogin.username
     OpusPassword = OpusLogin.password 
 
-    #Robotpassword
+    # Robotpassword
     RobotCredential = orchestrator_connection.get_credential("Robot365User") 
     RobotUsername = RobotCredential.username
     RobotPassword = RobotCredential.password
 
     # Define the queue name
     queue_name = "OpusBookmarkQueue" 
-
-    # Assign variables from SpecificContent
-    OpusBookmark = None
-    SharePointURL = None
-    FileName = None
-    Daily = None
-    MonthEnd = None
-    MonthStart = None
-    Yearly = None
 
     # Get all queue elements with status 'New'
     queue_item = orchestrator_connection.get_next_queue_element(queue_name)
@@ -57,22 +96,21 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
         exit()
 
     specific_content = json.loads(queue_item.data)
-    # specific_content = queue_item
 
-    if log:
-        orchestrator_connection.log_info("Assigning variables")
+    orchestrator_connection.log_info("Assigning variables")
 
     # Assign variables from SpecificContent
     BookmarkID = specific_content.get("Bookmark")
     OpusBookmark = orchestrator_connection.get_constant("OpusBookMarkUrl").value + BookmarkID
-    SharePointURL =  orchestrator_connection.get_constant("LauraTestSharepointURLFullPath").value ######Slet efter test - slet også konstant i OO
+    SharePointURL = orchestrator_connection.get_constant("LauraTestSharepointURLFullPath").value
     #SharepointURL = specific_content.get("SharePointMappeLink", None)
     FileName = specific_content.get("Filnavn", None)
     Daily = specific_content.get("Dagligt (Ja/Nej)", None)
     MonthEnd = specific_content.get("MånedsSlut (Ja/Nej)", None)
     MonthStart = specific_content.get("MånedsStart (Ja/Nej)", None)
     Yearly = specific_content.get("Årligt (Ja/Nej)", None)
-    # Mark the queue item as 'In Progress'
+
+     # Mark the queue item as 'In Progress'
     orchestrator_connection.set_queue_element_status(queue_item.id, "IN_PROGRESS")
 
     # Mark the queue item as 'Done' after processing
@@ -80,94 +118,68 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
 
     Run = False
 
-    #Testing if it should run
+    # Testing if it should run
     if Daily.lower() == "ja":
         Run = True
     else:
         current_date = datetime.now()
         year, month, day = current_date.year, current_date.month, current_date.day
-        
-        # Check for month-end
         last_day_of_month = calendar.monthrange(year, month)[1]  
         if MonthEnd.lower() == "ja" and day == last_day_of_month:
             Run = True
-        # Check for month-start
         elif MonthStart.lower() == "ja" and day == 1:
             Run = True
-        # Check for year-end
         elif Yearly.lower() == "ja" and day == 31 and month == 12:
             Run = True
-        
+
     if Run:
-        def convert_xls_to_xlsx(path: str) -> None:
-            absolute_path = os.path.abspath(path)
-            excel = win32.gencache.EnsureDispatch('Excel.Application')
-            wb = excel.Workbooks.Open(absolute_path)
+        orchestrator_connection.log_info("Connecting to sharepoint")
+        SharepointURL_connection = SharePointURL.split("/Delte")[0]
 
-            # FileFormat=51 is for .xlsx extension
-            new_path = os.path.splitext(absolute_path)[0] + ".xlsx"
-            wb.SaveAs(new_path, FileFormat=51)
-            wb.Close()
-            excel.Application.Quit()    
-            if os.path.exists(absolute_path):
-                os.remove(absolute_path)
-
-
-        # SharePoint credentials
-        if log:
-            orchestrator_connection.log_info("Connecting to sharepoint")
-        SharepointURL_connection = orchestrator_connection.get_constant("LauraTestSharepointURL").value
-        ####Den rigtige adgang skal bruges --- bare fx aarhuskommune osv, eller??
-
-        #Connecting to sharepoint
         credentials = UserCredential(RobotUsername, RobotPassword)
         ctx = ClientContext(SharepointURL_connection).with_credentials(credentials)
 
-        #Checking connection
         web = ctx.web
         ctx.load(web)
         ctx.execute_query()
 
-        # Selenium configuration
         downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads")
-        file_path = os.path.join(downloads_folder, FileName + ".xlsx")
+        file_path = os.path.join(downloads_folder, FileName + ".xls")
 
-        # Delete the file if it exists in the Downloads folder
         if os.path.exists(file_path):
             os.remove(file_path)
+            print('File removed')
+
         chrome_options = Options()
         chrome_options.add_experimental_option("prefs", {
             "download.default_directory": downloads_folder,
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
         })
-        chrome_service = Service()  # Dynamically locate ChromeDriver if required
+        chrome_options.add_argument("--disable-search-engine-choice-screen")
+
+        chrome_service = Service()
         driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-
+        
         try:
-            # Step 1: Navigate to the Opus portal and log in
+            orchestrator_connection.log_info("Navigating to Opus login page")
             driver.get(orchestrator_connection.get_constant("OpusAdgangUrl").value)
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "logonuidfield")))
+            WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "logonuidfield")))
             
-            username_field = driver.find_element(By.ID, "logonuidfield")
-            password_field = driver.find_element(By.ID, "logonpassfield")
-            username_field.send_keys(OpusUser)
-            password_field.send_keys(OpusPassword)
+            driver.find_element(By.ID, "logonuidfield").send_keys(OpusUser)
+            driver.find_element(By.ID, "logonpassfield").send_keys(OpusPassword)
             driver.find_element(By.ID, "buttonLogon").click()
-
-            # Step 2: Navigate to the specific bookmark
+            
+            orchestrator_connection.log_info("Logged in to Opus portal successfully")
             driver.get(OpusBookmark)
-            WebDriverWait(driver, 20).until(
-                EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "iframe[id^='iframe_Roundtrip']"))
-            )
+            WebDriverWait(driver, 60*15).until(EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "iframe[id^='iframe_Roundtrip']")))
 
-            # Step 3: Wait for the export button to appear
-            WebDriverWait(driver, 60).until(
-                EC.presence_of_element_located((By.ID, "ACTUAL_DATE_TEXT_TextItem"))
-            )
+            WebDriverWait(driver, 60*15).until(EC.presence_of_element_located((By.ID, "BUTTON_EXPORT_btn1_acButton")))
             driver.find_element(By.ID, "BUTTON_EXPORT_btn1_acButton").click()
 
-            # Step 4: Wait for the file download to complete
+            orchestrator_connection.log_info("Waiting for file download to complete")
+            time.sleep(2)
+
             initial_file_count = len(os.listdir(downloads_folder))
             start_time = time.time()
             while True:
@@ -179,89 +191,51 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
                     if latest_file.endswith(".xls"):
                         new_file_path = os.path.join(downloads_folder, f"{FileName}.xls")
                         os.rename(latest_file, new_file_path)
-
+                        orchestrator_connection.log_info(f"File downloaded and renamed to {new_file_path}")
                         break
-                if time.time() - start_time > 1800:  # Timeout after 30 minutes
+                if time.time() - start_time > 1800:
                     raise TimeoutError("File download did not complete within 30 minutes.")
                 time.sleep(1)
-            
 
-            # Step 5: Convert the downloaded file to .xlsx
+            xlsx_file_path = os.path.join(downloads_folder, FileName + ".xlsx")
+            try:
+                orchestrator_connection.log_info(f'Converting {new_file_path}')
+                convert_xls_to_xlsx(new_file_path)
+                orchestrator_connection.log_info("File converted successfully")
+                Run = False
+            except Exception as e:
+                gc.collect()
+                subprocess.call("taskkill /im excel.exe /f >nul 2>&1", shell=True)
+                time.sleep(2)
+                if os.path.exists(xlsx_file_path):
+                    os.remove(xlsx_file_path)
+                orchestrator_connection.log_error(str(e))
+                raise e
 
-            xlsx_file_path = os.path.join(downloads_folder, FileName + ".xlsx")            
-            convert_xls_to_xlsx(new_file_path)
-
-            file_processed = True
-            
         except Exception as e:
-            orchestrator_connection.log_error(f"An error occurred during Selenium operations: {str(e)}")
+            orchestrator_connection.log_error(f"An error occurred: {e}")
+            print(f"An error occurred: {e}")
         finally:
             driver.quit()
 
-        if log:
-            orchestrator_connection.log_info("Getting file/folder")
+    file_name = os.path.basename(xlsx_file_path)
+    download_path = os.path.join(downloads_folder, file_name)
+
+    orchestrator_connection.log_info("Uploading file to sharepoint")
+
+    parsed_url = urlparse(SharePointURL)
+    query_params = parse_qs(parsed_url.query)
+    id_param = query_params.get("id", [None])[0]
+    if not id_param:
+        raise ValueError("No 'id' parameter found in the URL.")
+    decoded_path = unquote(id_param)
+    decoded_path = decoded_path.rstrip('/')
+    target_folder = ctx.web.get_folder_by_server_relative_url(decoded_path)
+
+    with open(xlsx_file_path, "rb") as local_file:
+        target_folder.upload_file(file_name, local_file.read()).execute_query()
+        print(f"File '{file_name}' uploaded successfully to {SharePointURL}")
         
-        if file_processed:
-            file_name = os.path.basename(xlsx_file_path)
-            download_path = os.path.join(downloads_folder, file_name)
-
-            if log:
-                orchestrator_connection.log_info("Uploading file to sharepoint")
-
-            if ":f:" in SharePointURL or ":r:" in SharePointURL:
-                # Shared link resolution
-                response = ctx.execute_request_direct({
-                    "url": SharePointURL,
-                    "method": "GET",
-                    "headers": {
-                        "Accept": "application/json;odata=verbose"
-                    }
-                })
-
-                if response.status_code == 200:
-                    resolved_data = response.json()
-                    server_relative_url = resolved_data.get("d", {}).get("ServerRelativeUrl", None)
-                    if not server_relative_url:
-                        raise ValueError("Failed to resolve shared link to a server-relative URL.")
-                    server_relative_url = server_relative_url.rstrip('/')
-                    target_folder = ctx.web.get_folder_by_server_relative_url(server_relative_url)
-                else:
-                    raise ValueError(f"Failed to resolve shared link. Status code: {response.status_code}")
-            else:
-                # Standard URL resolution
-                parsed_url = urlparse(SharePointURL)
-
-                # Extract the `id` parameter that contains the folder path
-                query_params = parse_qs(parsed_url.query)
-                id_param = query_params.get("id", [None])[0]  # Extract the 'id' parameter value
-                if not id_param:
-                    raise ValueError("No 'id' parameter found in the URL.")
-                decoded_path = unquote(id_param)  # Decode URL-encoded folder path
-
-                # Validate the extracted path
-                if not decoded_path.startswith(('/Teams')):
-                    raise ValueError(f"Invalid decoded path extracted from URL: {decoded_path}")
-
-                # Normalize the path to ensure it captures the full folder path
-                decoded_path = decoded_path.rstrip('/')
-
-                # Access the folder directly
-                target_folder = ctx.web.get_folder_by_server_relative_url(decoded_path)
-
-            if not file_processed:
-                        print("Something went wrong with the file download")
-            else:
-                with open(xlsx_file_path, "rb") as local_file:
-                    file_content = local_file.read()
-                    target_folder.upload_file(file_name, file_content).execute_query()
-
-                print(f"File '{file_name}' uploaded successfully to {SharePointURL}")
-            
-       
-            #Removing the local file
-            if os.path.exists(xlsx_file_path):
-                os.remove(xlsx_file_path)
-            
-            if os.path.exists(downloads_folder + "YKMD_STD.xls"):
-                os.remove(download_path + "YKMD_STD.xls" )
-
+    if os.path.exists(xlsx_file_path):
+        os.remove(xlsx_file_path)
+        print(f'Deleted {xlsx_file_path}')
