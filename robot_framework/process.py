@@ -22,6 +22,7 @@ import subprocess
 
 
 def process(orchestrator_connection: OrchestratorConnection, queue_element: QueueElement | None = None) -> None:
+   
     # Global variables for ensuring single execution
     conversion_in_progress = set()
 
@@ -39,31 +40,18 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
             return
         
         conversion_in_progress.add(absolute_path)
-        start_time = time.time()  # Start the timer
         try:
             orchestrator_connection.log_info(f'Absolute path {absolute_path} found')
             excel = win32.gencache.EnsureDispatch('Excel.Application')
             wb = excel.Workbooks.Open(absolute_path)
 
-            # Check for timeout before proceeding
-            if time.time() - start_time > timeout:
-                raise TimeoutError("Conversion timed out before saving the file.")
-
             # FileFormat=51 is for .xlsx extension
             new_path = os.path.splitext(absolute_path)[0] + ".xlsx"
             wb.SaveAs(new_path, FileFormat=51)
-
-            # Check for timeout before closing
-            if time.time() - start_time > timeout:
-                raise TimeoutError("Conversion timed out before closing the workbook.")
-            
             wb.Close()
             excel.Application.Quit()
             del wb
             del excel
-        except TimeoutError as e:
-            orchestrator_connection.log_error(str(e))
-            raise e
         except Exception as e:
             orchestrator_connection.log_error(f"An unexpected error occurred: {e}")
             raise e
@@ -109,7 +97,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     MonthStart = specific_content.get("MånedsStart (Ja/Nej)", None)
     Yearly = specific_content.get("Årligt (Ja/Nej)", None)
 
-     # Mark the queue item as 'In Progress'
+        # Mark the queue item as 'In Progress'
     orchestrator_connection.set_queue_element_status(queue_item.id, "IN_PROGRESS")
 
     # Mark the queue item as 'Done' after processing
@@ -171,9 +159,9 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
             
             orchestrator_connection.log_info("Logged in to Opus portal successfully")
             driver.get(OpusBookmark)
-            WebDriverWait(driver, 60*15).until(EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "iframe[id^='iframe_Roundtrip']")))
+            WebDriverWait(driver, timeout = 60*15).until(EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "iframe[id^='iframe_Roundtrip']")))
 
-            WebDriverWait(driver, 60*15).until(EC.presence_of_element_located((By.ID, "BUTTON_EXPORT_btn1_acButton")))
+            WebDriverWait(driver, timeout = 60*15).until(EC.presence_of_element_located((By.ID, "BUTTON_EXPORT_btn1_acButton")))
             driver.find_element(By.ID, "BUTTON_EXPORT_btn1_acButton").click()
 
             orchestrator_connection.log_info("Waiting for file download to complete")
