@@ -22,7 +22,7 @@ import subprocess
 
 
 def process(orchestrator_connection: OrchestratorConnection, queue_element: QueueElement | None = None) -> None:
-        # Global variables for ensuring single execution
+    # Global variables for ensuring single execution
     conversion_in_progress = set()
 
     def convert_xls_to_xlsx(path: str, timeout: int = 60) -> None:
@@ -52,7 +52,6 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
             # FileFormat=51 is for .xlsx extension
             new_path = os.path.splitext(absolute_path)[0] + ".xlsx"
             wb.SaveAs(new_path, FileFormat=51)
-            orchestrator_connection.log_info("wb save")
 
             # Check for timeout before closing
             if time.time() - start_time > timeout:
