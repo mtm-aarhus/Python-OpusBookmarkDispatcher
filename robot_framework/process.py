@@ -231,7 +231,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
             os.remove(xlsx_file_path)
     else:
         print("An error occured - file was not processed correctly")
-        orchestrator_connection.log_info("An error occured - file was not processed correctly")
+        orchestrator_connection.log_error("An error occured - file was not processed correctly")
 
     #Deleting potential leftover files from downloads folder
     orchestrator_connection.log_info('Deleting local files')
