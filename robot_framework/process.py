@@ -1,4 +1,3 @@
-"""This module contains the main process of the robot."""
 import json
 from OpenOrchestrator.orchestrator_connection.connection import OrchestratorConnection
 from office365.runtime.auth.user_credential import UserCredential
@@ -21,12 +20,13 @@ import gc
 import subprocess
 
 
+
 def process(orchestrator_connection: OrchestratorConnection, queue_element: QueueElement | None = None) -> None:
    
     # Global variables for ensuring single execution
     conversion_in_progress = set()
 
-    def convert_xls_to_xlsx(path: str, timeout: int = 60) -> None:
+    def convert_xls_to_xlsx(path: str) -> None:
         """
         Converts an .xls file to .xlsx format. Times out if the process exceeds the given duration.
         
@@ -57,10 +57,6 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
             raise e
         finally:
             conversion_in_progress.remove(absolute_path)
-
-
-    orchestrator_connection = OrchestratorConnection("PythonOpusBookMark", os.getenv('OpenOrchestratorSQL'), os.getenv('OpenOrchestratorKey'), None)
-
     orchestrator_connection.log_info("Started process")
 
     # Opus bruger
@@ -96,6 +92,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     MonthEnd = specific_content.get("MånedsSlut (Ja/Nej)", None)
     MonthStart = specific_content.get("MånedsStart (Ja/Nej)", None)
     Yearly = specific_content.get("Årligt (Ja/Nej)", None)
+    print(FileName)
 
         # Mark the queue item as 'In Progress'
     orchestrator_connection.set_queue_element_status(queue_item.id, "IN_PROGRESS")
@@ -104,6 +101,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     orchestrator_connection.set_queue_element_status(queue_item.id, "DONE")
 
     Run = False
+    xlsx_file_path_check = False
 
     # Testing if it should run
     if Daily.lower() == "ja":
@@ -176,53 +174,68 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
                         [os.path.join(downloads_folder, f) for f in files], key=os.path.getctime
                     )
                     if latest_file.endswith(".xls"):
+                        orchestrator_connection.log_info('Found xls file')
                         new_file_path = os.path.join(downloads_folder, f"{FileName}.xls")
                         os.rename(latest_file, new_file_path)
                         orchestrator_connection.log_info(f"File downloaded and renamed to {new_file_path}")
+                        xlsx_file_path_check = True
                         break
+                    
                 if time.time() - start_time > 1800:
                     raise TimeoutError("File download did not complete within 30 minutes.")
+                    
                 time.sleep(1)
-
-            xlsx_file_path = os.path.join(downloads_folder, FileName + ".xlsx")
-            try:
-                orchestrator_connection.log_info(f'Converting {new_file_path}')
-                convert_xls_to_xlsx(new_file_path)
-                orchestrator_connection.log_info("File converted successfully")
-                Run = False
-            except Exception as e:
-                gc.collect()
-                subprocess.call("taskkill /im excel.exe /f >nul 2>&1", shell=True)
-                time.sleep(2)
-                if os.path.exists(xlsx_file_path):
-                    os.remove(xlsx_file_path)
-                orchestrator_connection.log_error(str(e))
-                raise e
+            if xlsx_file_path_check == True:
+                xlsx_file_path = os.path.join(downloads_folder, FileName + ".xlsx")
+                try:
+                    orchestrator_connection.log_info(f'Converting {new_file_path}')
+                    convert_xls_to_xlsx(new_file_path)
+                    orchestrator_connection.log_info("File converted successfully")
+            
+                except Exception as e:
+                    gc.collect()
+                    subprocess.call("taskkill /im excel.exe /f >nul 2>&1", shell=True)
+                    time.sleep(2)
+                    if os.path.exists(xlsx_file_path):
+                        os.remove(xlsx_file_path)
+                    orchestrator_connection.log_error(str(e))
+                    raise e
 
         except Exception as e:
             orchestrator_connection.log_error(f"An error occurred: {e}")
             print(f"An error occurred: {e}")
         finally:
             driver.quit()
+    print(str(xlsx_file_path_check) + "Check")
+    if xlsx_file_path_check == True:
+        file_name = os.path.basename(xlsx_file_path)
+        download_path = os.path.join(downloads_folder, file_name)
 
-    file_name = os.path.basename(xlsx_file_path)
-    download_path = os.path.join(downloads_folder, file_name)
+        orchestrator_connection.log_info("Uploading file to sharepoint")
 
-    orchestrator_connection.log_info("Uploading file to sharepoint")
+        parsed_url = urlparse(SharePointURL)
+        query_params = parse_qs(parsed_url.query)
+        id_param = query_params.get("id", [None])[0]
+        if not id_param:
+            raise ValueError("No 'id' parameter found in the URL.")
+        decoded_path = unquote(id_param)
+        decoded_path = decoded_path.rstrip('/')
+        target_folder = ctx.web.get_folder_by_server_relative_url(decoded_path)
 
-    parsed_url = urlparse(SharePointURL)
-    query_params = parse_qs(parsed_url.query)
-    id_param = query_params.get("id", [None])[0]
-    if not id_param:
-        raise ValueError("No 'id' parameter found in the URL.")
-    decoded_path = unquote(id_param)
-    decoded_path = decoded_path.rstrip('/')
-    target_folder = ctx.web.get_folder_by_server_relative_url(decoded_path)
+        with open(xlsx_file_path, "rb") as local_file:
+            target_folder.upload_file(file_name, local_file.read()).execute_query()
+            print(f"File '{file_name}' uploaded successfully to {SharePointURL}")
+            
+        if os.path.exists(xlsx_file_path):
+            os.remove(xlsx_file_path)
+    else:
+        print("An error occured - file was not processed correctly")
+        orchestrator_connection.log_info("An error occured - file was not processed correctly")
 
-    with open(xlsx_file_path, "rb") as local_file:
-        target_folder.upload_file(file_name, local_file.read()).execute_query()
-        print(f"File '{file_name}' uploaded successfully to {SharePointURL}")
-        
-    if os.path.exists(xlsx_file_path):
-        os.remove(xlsx_file_path)
-        print(f'Deleted {xlsx_file_path}')
+    #Deleting potential leftover files from downloads folder
+    orchestrator_connection.log_info('Deleting local files')
+    if os.path.exists(downloads_folder + '\\' + FileName + ".xls"):
+        os.remove(downloads_folder + '\\' +  FileName + ".xls")
+    if os.path.exists("YKMD_STD.xls"):
+        os.remove("YKMD_STD.xls")
+
