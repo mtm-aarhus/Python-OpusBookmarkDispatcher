@@ -93,6 +93,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     MonthStart = specific_content.get("MånedsStart (Ja/Nej)", None)
     Yearly = specific_content.get("Årligt (Ja/Nej)", None)
     print(FileName)
+    orchestrator_connection.log_info(FileName)
 
         # Mark the queue item as 'In Progress'
     orchestrator_connection.set_queue_element_status(queue_item.id, "IN_PROGRESS")
