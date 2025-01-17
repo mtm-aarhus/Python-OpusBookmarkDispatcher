@@ -143,7 +143,6 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
             "download.directory_upgrade": True,
         })
         chrome_options.add_argument("--disable-search-engine-choice-screen")
-
         chrome_service = Service()
         driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
         
