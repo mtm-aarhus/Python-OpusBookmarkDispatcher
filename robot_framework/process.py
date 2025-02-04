@@ -23,9 +23,7 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
 
     # SharePoint site and parent folder URL
     PARENT_FOLDER_URL = "/Teams/tea-teamsite11314/Delte Dokumenter/OpusBogmærker.xlsx"
-
     file_name = PARENT_FOLDER_URL.split("/")[-1]
-
     download_path = os.path.join(os.getcwd(), file_name)
 
     # Download the file to the specified path
@@ -38,9 +36,8 @@ def process(orchestrator_connection: OrchestratorConnection, queue_element: Queu
     # Access the workbook
     ark1 = workbook["Ark1"]
     ark1 = workbook.active
-
     row_count = ark1.max_row
-
+    
     queue_items = []
 
     if row_count > 0:
