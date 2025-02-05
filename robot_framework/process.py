@@ -1,4 +1,5 @@
 from OpenOrchestrator.orchestrator_connection.connection import OrchestratorConnection
+from OpenOrchestrator.database.queues import QueueElement
 from office365.runtime.auth.user_credential import UserCredential
 from office365.sharepoint.client_context import ClientContext
 import os
